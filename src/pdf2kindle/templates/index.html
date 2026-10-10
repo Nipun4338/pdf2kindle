@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block main %}
+<section class="card">
+  <h1>Convert a PDF</h1>
+  {% if not ocr %}
+  <p class="warn">Tesseract isn't installed, so scanned pages and pages with a broken text layer
+    will be kept as page images. See the README to install it.</p>
+  {% endif %}
+  <form action="/conversions" method="post" enctype="multipart/form-data" class="upload">
+    <label class="drop" for="file">
+      <span id="file-label">Choose a PDF or drop it here</span>
+      <input id="file" name="file" type="file" accept="application/pdf,.pdf" required>
+    </label>
+    <div class="row">
+      <label>Language
+        <select name="lang">
+          <option value="auto" selected>Detect automatically</option>
+          <option value="bn">Bengali</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="strip_noise" value="true" checked>
+        Remove running headers, footers &amp; page numbers</label>
+      <label class="check"><input type="checkbox" name="grayscale" value="true">
+        Grayscale images</label>
+    </div>
+    <button type="submit" class="primary">Start conversion</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Conversions</h2>
+  {% if conversions %}
+  <div class="scroll"><table class="list">
+    <thead><tr><th>File</th><th>Status</th><th>Pages</th><th>Started</th><th></th></tr></thead>
+    <tbody>
+    {% for c in conversions %}
+      <tr>
+        <td><a href="/conversions/{{ c.id }}">{{ c.metadata.title or c.filename }}</a>
+          <div class="muted">{{ c.filename }}</div></td>
+        <td><span class="badge {{ c.status }}">{{ c.status }}</span></td>
+        <td>{{ c.progress.done }}/{{ c.progress.total }}</td>
+        <td class="muted">{{ c.created[:16].replace("T", " ") }}</td>
+        <td><form action="/conversions/{{ c.id }}/delete" method="post"
+                  onsubmit="return confirm('Delete this conversion and its files?')">
+          <button class="link danger">Delete</button></form></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="muted">Conversions older than {{ retention }} days are removed automatically.</p>
+  {% else %}
+  <p class="muted">Nothing yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

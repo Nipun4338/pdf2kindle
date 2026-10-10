@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}{{ c.metadata.title or c.filename }} · pdf2kindle{% endblock %}
+{% block main %}
+<p><a href="/">← All conversions</a></p>
+<h1>{{ c.metadata.title or c.filename }}</h1>
+
+{% if c.status in ("queued", "processing") %}
+<section class="card" id="progress" data-status-url="/conversions/{{ c.id }}/status">
+  <p><span class="badge {{ c.status }}" id="status">{{ c.status }}</span>
+    <span id="count">{{ c.progress.done }} / {{ c.progress.total or "?" }} pages</span></p>
+  <progress id="bar" max="{{ c.progress.total or 1 }}" value="{{ c.progress.done }}"></progress>
+  <p class="muted">Scanned pages are OCR'd and can take a while. You can leave this page; the
+    conversion keeps running.</p>
+</section>
+
+{% elif c.status == "failed" %}
+<section class="card">
+  <p class="warn">Conversion failed: {{ c.error }}</p>
+  <form action="/conversions/{{ c.id }}/delete" method="post"><button class="danger">Delete</button></form>
+</section>
+
+{% else %}
+<section class="card" id="download">
+  <h2>Download</h2>
+  {% if epub_size %}
+  <p><a class="button primary" href="/conversions/{{ c.id }}/book.epub" download>Download EPUB</a>
+    <span class="muted">{{ "%.1f MB" | format(epub_size / 1048576) if epub_size >= 1048576 else "%d KB" | format(epub_size // 1024) }} · built {{ c.exported[:16].replace("T", " ") }}</span></p>
+  <p class="muted">Send it to your Kindle with <a href="https://www.amazon.com/sendtokindle" rel="noreferrer">Send to Kindle</a>.
+    Changes below take effect when you build again.</p>
+  {% else %}
+  <p class="muted">Review the details below, then build the EPUB.</p>
+  {% endif %}
+</section>
+
+<form class="card" id="review" action="/conversions/{{ c.id }}/settings" method="post" enctype="multipart/form-data">
+  <h2>Book details</h2>
+  <div class="grid">
+    <label>Title <input name="title" value="{{ c.metadata.title }}" required></label>
+    <label>Author <input name="author" value="{{ c.metadata.author }}"></label>
+  </div>
+  <div class="row">
+    <label class="check"><input type="radio" name="cover" value="page1" {% if c.cover == "page1" %}checked{% endif %}> Cover from page 1</label>
+    <label class="check">Or upload a cover <input type="file" name="cover_file" accept="image/*"></label>
+    {% if c.cover == "upload" %}<span class="muted">(using uploaded cover)</span>{% endif %}
+  </div>
+  <div class="row">
+    <label class="check"><input type="checkbox" name="strip_noise" {% if c.settings.strip_noise %}checked{% endif %}> Remove running headers, footers &amp; page numbers</label>
+    <label class="check"><input type="checkbox" name="grayscale" {% if c.settings.grayscale %}checked{% endif %}> Grayscale images</label>
+  </div>
+
+  <h2>Table of contents</h2>
+  <p class="muted">Chapters start a new section on the Kindle; sub-sections are links inside a chapter.</p>
+  <div class="scroll"><table class="toc">
+    <thead><tr><th>Title</th><th>Page</th><th>Level</th><th>Remove</th></tr></thead>
+    <tbody>
+    {% for e in c.toc %}
+      <tr>
+        <td><input name="toc_title_{{ loop.index0 }}" value="{{ e.title }}"></td>
+        <td><input name="toc_page_{{ loop.index0 }}" type="number" min="1" max="{{ c.progress.total }}" value="{{ e.page + 1 }}" class="num"></td>
+        <td><select name="toc_level_{{ loop.index0 }}">
+          <option value="1" {% if e.level == 1 %}selected{% endif %}>Chapter</option>
+          <option value="2" {% if e.level == 2 %}selected{% endif %}>Sub-section</option></select></td>
+        <td><input type="checkbox" name="toc_delete_{{ loop.index0 }}" aria-label="Remove {{ e.title }}"></td>
+      </tr>
+    {% endfor %}
+      <tr class="new">
+        <td><input name="toc_title_{{ c.toc | length }}" placeholder="Add an entry…"></td>
+        <td><input name="toc_page_{{ c.toc | length }}" type="number" min="1" max="{{ c.progress.total }}" class="num"></td>
+        <td><select name="toc_level_{{ c.toc | length }}"><option value="1">Chapter</option><option value="2">Sub-section</option></select></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="actions">
+    <button type="submit" name="save" value="1">Save</button>
+    <button type="submit" name="export" value="1" class="primary" id="build">Build EPUB</button>
+  </div>
+</form>
+
+<section class="card" id="report">
+  <h2>Conversion report</h2>
+  <p class="muted">{{ pages | length }} pages · {{ image_pages }} kept as page images.
+    Switch a page between text and image if the automatic choice looks wrong.</p>
+  <div class="scroll"><table class="report">
+    <thead><tr><th>Page</th><th></th><th>Kind</th><th>Output</th><th>OCR</th><th>Notes</th><th></th></tr></thead>
+    <tbody>
+    {% for p in pages %}
+      <tr id="page-{{ p.index }}" class="{{ p.mode }}">
+        <td>{{ p.index + 1 }}</td>
+        <td><img loading="lazy" src="/conversions/{{ c.id }}/pages/{{ p.index }}.jpg" alt="" class="thumb"></td>
+        <td><span class="badge kind-{{ p.kind }}">{{ p.kind }}</span></td>
+        <td>{{ "Page image" if p.mode == "image" else "Text" }}</td>
+        <td>{{ "%.0f%%" | format(p.confidence) if p.confidence is not none else "—" }}</td>
+        <td class="muted">{{ p.reason }}</td>
+        <td><form action="/conversions/{{ c.id }}/pages/{{ p.index }}/mode" method="post">
+          <button class="link">Use {{ "text" if p.mode == "image" else "image" }}</button></form></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+<form action="/conversions/{{ c.id }}/delete" method="post" onsubmit="return confirm('Delete this conversion and its files?')">
+  <button class="link danger">Delete this conversion</button>
+</form>
+{% endif %}
+{% endblock %}
