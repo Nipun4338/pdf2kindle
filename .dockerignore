@@ -1,0 +1,10 @@
+.git
+.venv
+.claude
+tools
+data
+tests
+docs
+**/__pycache__
+*.epub
+*.pdf
