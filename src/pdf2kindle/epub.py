@@ -8,6 +8,11 @@ from html import escape
 from importlib import resources
 from pathlib import Path
 
+# Amazon's converter (Send to Kindle / Kindle Previewer) fails with an internal error when the
+# package language is one it doesn't support, such as Bengali. Such books declare English at
+# the package level; every Bengali paragraph and heading still carries lang="bn".
+KINDLE_PACKAGE_LANGS = {"en"}
+
 FONT_FILES = ("NotoSerifBengali-Regular.ttf", "NotoSerifBengali-Bold.ttf")
 
 CSS = """\
@@ -177,17 +182,18 @@ def write_epub(book: EpubBook, out: Path) -> int:
             files[f"fonts/{name}"] = (fonts / name).read_bytes()
             manifest.append(f'<item id="font{n}" href="fonts/{name}" media-type="font/ttf"/>')
 
+    package_lang = book.lang if book.lang in KINDLE_PACKAGE_LANGS else "en"
     modified = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     cover_meta = '<meta name="cover" content="cover-image"/>' if book.cover else ""
     opf = (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid" '
-        f'xml:lang="{book.lang}">'
+        f'xml:lang="{package_lang}">'
         '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
         f'<dc:identifier id="uid">{escape(book.identifier)}</dc:identifier>'
         f"<dc:title>{escape(book.title)}</dc:title>"
         f"<dc:creator>{escape(book.author or 'Unknown')}</dc:creator>"
-        f"<dc:language>{book.lang}</dc:language>"
+        f"<dc:language>{package_lang}</dc:language>"
         f'<meta property="dcterms:modified">{modified}</meta>{cover_meta}'
         f"</metadata><manifest>{''.join(manifest)}</manifest>"
         f'<spine toc="ncx">{"".join(spine)}</spine></package>'
