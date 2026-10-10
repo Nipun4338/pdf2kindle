@@ -136,3 +136,44 @@ def test_pdfium_is_safe_across_threads(pdfs):
 
     with ThreadPoolExecutor(8) as pool:
         assert all(w > 0 for w in pool.map(thumb, range(80)))
+
+
+@pytest.mark.parametrize("levels", [[2, 1, 2, 2, 1], [1, 2, 2, 1, 2], [2, 2], [1, 1], [1, 2, 1]])
+def test_nav_is_well_formed_for_any_toc_levels(levels, tmp_path):
+    import xml.etree.ElementTree as ET
+
+    from pdf2kindle.epub import Chapter, EpubBook, NavPoint, write_epub
+
+    nav = [NavPoint(f"Entry {i}", 0, f"a{i}", lv) for i, lv in enumerate(levels)]
+    book = EpubBook("T", "A", "en", [Chapter("T", "<p>x</p>", "en")], nav)
+    out = tmp_path / "b.epub"
+    write_epub(book, out)
+    with zipfile.ZipFile(out) as z:
+        root = ET.fromstring(z.read("OEBPS/nav.xhtml"))
+    ns = {"x": "http://www.w3.org/1999/xhtml"}
+    assert len(root.findall(".//x:a", ns)) == len(levels)
+    for ol in root.iter("{http://www.w3.org/1999/xhtml}ol"):
+        assert all(child.tag.endswith("li") for child in ol)
+
+
+def test_scan_with_junk_ocr_layer_is_reocrd():
+    from pdf2kindle.classify import latin_plausibility
+
+    junk = 'c+t torqat :o sacrEr l*nTf5 q<E.ra En niq E"li ffiiist c+g ciFr"l'
+    assert latin_plausibility(junk) < 0.5
+    assert latin_plausibility(" ".join(EN_PARAGRAPHS)) > 0.95
+
+
+def test_heading_toc_skips_numbers_isbns_and_sentences():
+    from pdf2kindle.layout import Block, headings_toc
+
+    blocks = [
+        Block("h", 0, "৬", level=1),
+        Block("h", 0, "15814-984-18-0009-8", level=1),
+        Block("h", 1, "কালো বিড়াল", level=1),
+        Block("h", 1, "কালো বিড়াল", level=1),
+        Block("h", 1, "নেকলেসটা হারিয়েছি।", level=2),
+        Block("h", 1, "'তুমিই জানো...'", level=2),
+        Block("h", 2, "প্রতিহিংসার তীব্র আগুন ফুটে বেরুচ্ছিল তার দুই চোখ থেকে, আর সে", level=2),
+    ]
+    assert [e.title for e in headings_toc(blocks)] == ["কালো বিড়াল"]

@@ -48,4 +48,5 @@ testpaths = ["tests"]
 markers = [
     "ocr: needs Tesseract with ben+eng data",
     "e2e: drives the web UI in a real browser",
+    "kindle: runs Amazon's Kindle Previewer converter",
 ]
