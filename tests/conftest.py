@@ -1,3 +1,4 @@
+import csv
 import os
 import shutil
 import subprocess
@@ -59,6 +60,44 @@ def epubcheck():
         assert result.returncode == 0, result.stdout + result.stderr
 
     return check
+
+
+def _kindle_previewer() -> list[str] | None:
+    """Command prefix for Kindle Previewer 3's converter, if installed."""
+    if os.environ.get("KINDLE_PREVIEWER"):
+        return [os.environ["KINDLE_PREVIEWER"]]
+    bat = Path(os.environ.get("APPDATA", "")) / "Amazon" / "kindlepreviewer.bat"
+    return ["cmd", "/c", str(bat)] if os.name == "nt" and bat.exists() else None
+
+
+@pytest.fixture(scope="session")
+def kindle_convert():
+    """Run Amazon's own EPUB → Kindle conversion; returns (status, errors)."""
+    cmd = _kindle_previewer()
+    if not cmd:
+        pytest.skip("Kindle Previewer 3 is not installed")
+
+    def convert(epub: Path) -> tuple[str, list[str]]:
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = Path(tmp) / "book.epub", Path(tmp) / "out"
+            shutil.copy(epub, src)
+            out.mkdir()  # the converter silently does nothing if this doesn't exist
+            subprocess.run(
+                [*cmd, str(src), "-convert", "-output", str(out), "-locale", "en"],
+                capture_output=True,
+                timeout=900,
+            )
+            with open(out / "Summary_Log.csv", encoding="utf-8-sig") as f:
+                header, row = list(csv.reader(f))[:2]
+            summary = dict(zip(header, row, strict=False))
+            errors = []
+            log = Path(summary["Log File Path"])
+            if log.exists():
+                with open(log, encoding="utf-8-sig") as f:
+                    errors = [r[1] for r in csv.reader(f) if r and r[0] == "Error"]
+            return summary["Conversion Status"], errors
+
+    return convert
 
 
 def epub_text(path: Path) -> str:
