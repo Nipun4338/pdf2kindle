@@ -162,3 +162,18 @@ def test_scan_with_junk_ocr_layer_is_reocrd():
     junk = 'c+t torqat :o sacrEr l*nTf5 q<E.ra En niq E"li ffiiist c+g ciFr"l'
     assert latin_plausibility(junk) < 0.5
     assert latin_plausibility(" ".join(EN_PARAGRAPHS)) > 0.95
+
+
+def test_heading_toc_skips_numbers_isbns_and_sentences():
+    from pdf2kindle.layout import Block, headings_toc
+
+    blocks = [
+        Block("h", 0, "৬", level=1),
+        Block("h", 0, "15814-984-18-0009-8", level=1),
+        Block("h", 1, "কালো বিড়াল", level=1),
+        Block("h", 1, "কালো বিড়াল", level=1),
+        Block("h", 1, "নেকলেসটা হারিয়েছি।", level=2),
+        Block("h", 1, "'তুমিই জানো...'", level=2),
+        Block("h", 2, "প্রতিহিংসার তীব্র আগুন ফুটে বেরুচ্ছিল তার দুই চোখ থেকে, আর সে", level=2),
+    ]
+    assert [e.title for e in headings_toc(blocks)] == ["কালো বিড়াল"]

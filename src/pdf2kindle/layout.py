@@ -155,5 +155,23 @@ def _continues(prev: Block, nxt: Block) -> bool:
     )
 
 
+_NOT_TITLE_END = tuple("।!?,;:-'’”\"")
+
+
+def _title_like(text: str) -> bool:
+    """Could this heading be a chapter title? Not a number, an ISBN, or a line of dialogue."""
+    letters = sum(c.isalpha() or bengali.is_bengali_char(c) for c in text)
+    return (
+        letters >= 2
+        and len(text) <= 60
+        and len(text.split()) <= 8
+        and not text.rstrip(". ").endswith(_NOT_TITLE_END)
+    )
+
+
 def headings_toc(blocks: list[Block]) -> list[TocEntry]:
-    return [TocEntry(b.text, b.page, b.level) for b in blocks if b.kind == "h"]
+    toc: list[TocEntry] = []
+    for b in blocks:
+        if b.kind == "h" and _title_like(b.text) and not (toc and toc[-1].title == b.text):
+            toc.append(TocEntry(b.text, b.page, b.level))
+    return toc
