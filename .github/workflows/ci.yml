@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      TESSDATA_PREFIX: ${{ github.workspace }}/tessdata
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tesseract (tessdata_best ben + eng)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr
+          mkdir -p "$TESSDATA_PREFIX"
+          for lang in ben eng osd; do
+            curl -fsSL -o "$TESSDATA_PREFIX/$lang.traineddata" \
+              "https://github.com/tesseract-ocr/tessdata_best/raw/main/$lang.traineddata"
+          done
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - run: uv sync --frozen
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run playwright install --with-deps chromium
+      - run: sh scripts/get-epubcheck.sh
+      - run: uv run pytest -ra
