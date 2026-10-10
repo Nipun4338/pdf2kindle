@@ -136,3 +136,21 @@ def test_pdfium_is_safe_across_threads(pdfs):
 
     with ThreadPoolExecutor(8) as pool:
         assert all(w > 0 for w in pool.map(thumb, range(80)))
+
+
+@pytest.mark.parametrize("levels", [[2, 1, 2, 2, 1], [1, 2, 2, 1, 2], [2, 2], [1, 1], [1, 2, 1]])
+def test_nav_is_well_formed_for_any_toc_levels(levels, tmp_path):
+    import xml.etree.ElementTree as ET
+
+    from pdf2kindle.epub import Chapter, EpubBook, NavPoint, write_epub
+
+    nav = [NavPoint(f"Entry {i}", 0, f"a{i}", lv) for i, lv in enumerate(levels)]
+    book = EpubBook("T", "A", "en", [Chapter("T", "<p>x</p>", "en")], nav)
+    out = tmp_path / "b.epub"
+    write_epub(book, out)
+    with zipfile.ZipFile(out) as z:
+        root = ET.fromstring(z.read("OEBPS/nav.xhtml"))
+    ns = {"x": "http://www.w3.org/1999/xhtml"}
+    assert len(root.findall(".//x:a", ns)) == len(levels)
+    for ol in root.iter("{http://www.w3.org/1999/xhtml}ol"):
+        assert all(child.tag.endswith("li") for child in ol)

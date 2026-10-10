@@ -79,29 +79,24 @@ def _chapter_file(i: int) -> str:
 
 
 def _nav_tree(points: list[NavPoint], href) -> str:
-    out = ["<ol>"]
-    depth = 1
-    open_li = False
+    """Nested <ol>/<li> list. A deeper entry only nests under an existing parent entry, so
+    any sequence of levels (even one starting with a sub-section) gives valid XHTML."""
+    roots: list[tuple[NavPoint, list]] = []
     for p in points:
-        level = max(1, min(p.level, depth + 1))
-        while depth < level:
-            out.append("<ol>")
-            depth += 1
-            open_li = False
-        while depth > level:
-            out.append("</li></ol>")
-            depth -= 1
-        if open_li:
-            out.append("</li>")
-        out.append(f'<li><a href="{href(p)}">{escape(p.title)}</a>')
-        open_li = True
-    while depth > 1:
-        out.append("</li></ol>")
-        depth -= 1
-    if open_li:
-        out.append("</li>")
-    out.append("</ol>")
-    return "".join(out)
+        siblings, level = roots, 1
+        while level < p.level and siblings:
+            siblings = siblings[-1][1]
+            level += 1
+        siblings.append((p, []))
+
+    def render(nodes: list[tuple[NavPoint, list]]) -> str:
+        items = (
+            f'<li><a href="{href(p)}">{escape(p.title)}</a>{render(kids) if kids else ""}</li>'
+            for p, kids in nodes
+        )
+        return f"<ol>{''.join(items)}</ol>"
+
+    return render(roots)
 
 
 def _ncx(book: EpubBook, nav: list[NavPoint], href) -> str:
