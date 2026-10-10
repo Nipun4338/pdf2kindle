@@ -154,3 +154,11 @@ def test_nav_is_well_formed_for_any_toc_levels(levels, tmp_path):
     assert len(root.findall(".//x:a", ns)) == len(levels)
     for ol in root.iter("{http://www.w3.org/1999/xhtml}ol"):
         assert all(child.tag.endswith("li") for child in ol)
+
+
+def test_scan_with_junk_ocr_layer_is_reocrd():
+    from pdf2kindle.classify import latin_plausibility
+
+    junk = 'c+t torqat :o sacrEr l*nTf5 q<E.ra En niq E"li ffiiist c+g ciFr"l'
+    assert latin_plausibility(junk) < 0.5
+    assert latin_plausibility(" ".join(EN_PARAGRAPHS)) > 0.95
